@@ -9,19 +9,32 @@ import (
 
 // For once blocked site, use min dial/read timeout to make switching to
 // parent proxy faster.
-const minDialTimeout = 3 * time.Second
-const minReadTimeout = 4 * time.Second
+const minDialTimeout = 1 * time.Second
+const minReadTimeout = 2 * time.Second
 const defaultDialTimeout = 5 * time.Second
 const defaultReadTimeout = 5 * time.Second
-const maxTimeout = 15 * time.Second
+const defaultMaxTimeout = 15 * time.Second
+
+// Factor for timeout tolerence
+const defaultDialTolerance = 5
+const defaultReadTolerance = 10
 
 var dialTimeout = defaultDialTimeout
 var readTimeout = defaultReadTimeout
+var maxTimeout = defaultMaxTimeout
 
 // estimateTimeout tries to fetch a url and adjust timeout value according to
 // how much time is spent on connect and fetch. This avoids incorrectly
 // considering non-blocked sites as blocked when network connection is bad.
 func estimateTimeout(host string, payload []byte) {
+
+	// Configurable tolerance
+	dialTolerance := config.DialTolerance
+	readTolerance := config.ReadTolerance
+
+	maxTimeout = config.MaxTimeout
+	debug.Println("### maxTimeout", maxTimeout)
+
 	//debug.Println("estimating timeout")
 	buf := connectBuf.Get()
 	defer connectBuf.Put(buf)
@@ -35,8 +48,8 @@ func estimateTimeout(host string, payload []byte) {
 	}
 	defer c.Close()
 
-	est = time.Now().Sub(start) * 5
-	// debug.Println("estimated dialTimeout:", est)
+	est = time.Duration(int64(time.Now().Sub(start)) * int64(dialTolerance))
+	debug.Println("estimated dialTimeout:", est)
 	if est > maxTimeout {
 		est = maxTimeout
 	}
@@ -64,8 +77,8 @@ func estimateTimeout(host string, payload []byte) {
 			host, err)
 		goto onErr
 	}
-	est = time.Now().Sub(start) * 10
-	// debug.Println("estimated read timeout:", est)
+	est = time.Duration(int64(time.Now().Sub(start)) * int64(readTolerance))
+	debug.Println("estimated readTimeout:", est)
 	if est > maxTimeout {
 		est = maxTimeout
 	}
